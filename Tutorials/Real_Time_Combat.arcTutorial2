@@ -1,0 +1,623 @@
+--NAME = Real-time combat
+--DESCRIPTION = Proof-of-concept for real-time combat instead of turn-based. Known bugs include brief periods of immobility that occasionally occur when Chain Lightning is cast, the camera being weird, and the fact that sometimes a Cyclops will randomly die for no apparent reason when you kill a different Cyclops.
+--MAP = Tutorial1
+--SPELLS = {}
+--DEBUG = FALSE
+
+--CODE--
+
+--NAME = grapple_tut_template
+--DESCRIPTION = hi
+--MAP = Empty
+--SPELLS = {Arcane Bomb,Arcane Gate, Arcane Flash, Quake, Mud Ball, Mega Boulder, Shock Bomb, Ice Ball, Ice Bomb, Drain Bolt, Death Bomb, Clock Tower, Blast From The Past, Clockwork Bomb, Glide, Whisper Bomb}
+--DEBUG = FALSE
+
+--CODE--
+
+--grapplib(Above is pur3 land)
+facingDirection = true --true = right, false = left
+castCD = 120
+waitForExtraPresses = 0
+l = false
+k = false
+
+minions = {}
+minionCDs = {}
+enemyController = 0
+
+score = 0
+
+keyCodes = {}
+keyCodesBool = {}
+keyCodesRelease = {}
+keyCodesHeld = {}
+keyHist = "hi"
+GLOBAL_DEBUG = false
+GLOBAL_DEBUG_DOWNTIME_CHECK = false
+GLOBAL_MAP_HEIGHT = 950
+GLOBAL_MAP_WIDTH = 1910
+local function getLineCount(str)
+    local lines = 1
+    for i = 1, #str do
+        local c = str:sub(i, i)
+        if c == '\n' then lines = lines + 1 end
+    end
+    return lines
+end
+
+function onKeyHeld(key)
+	if game.busy then
+		if key == KeyCode.z and game.allowMovement then
+			game.getUser().walk(-1)
+		end
+		if key == KeyCode.x and game.allowMovement then
+			game.getUser().walk(1)
+		end
+	end
+end
+
+function onKeyDown(key)	
+	
+	if game.busy then
+		if key == KeyCode.Return and game.allowMovement then
+			game.getUser().LongJump(0)
+		end
+		if key == KeyCode.RightControl and game.allowMovement then
+			game.getUser().LongJump(0)
+		end
+		if key == KeyCode.LeftControl and game.allowMovement then
+			game.getUser().LongJump(0)
+		end
+		if key == KeyCode.Backspace and game.allowMovement then
+			game.getUser().HighJump(0)
+		end
+		if key == KeyCode.RightShift and game.allowMovement then
+			game.getUser().HighJump(0)
+		end
+		if key == KeyCode.LeftShift and game.allowMovement then
+			game.getUser().HighJump(0)
+		end
+	end
+	 	--[[
+	this is pur3's fault, you can get facing direction but can't set it. 
+	This won't work if people change keybinds so it's jank but its the only workaround I can think of. Grapple probably has better way.
+	Also it can just randomly not work for reasons I can't figure out but fk it
+	 TODO - get pur3 to add getDirection()
+	]]
+	 
+	--if not game.busy then
+	
+		if key == KeyCode.z and game.allowMovement then
+			facingDirection = false
+		end
+		if key == KeyCode.x and game.allowMovement then
+			facingDirection = true
+		end
+		if key == KeyCode.f and game.allowMovement then
+			facingDirection = not facingDirection
+		end
+		
+		if castCD == 0 and waitForExtraPresses >= 0 and game.allowMovement then 
+			if key == KeyCode.k then
+				k = true
+				waitForExtraPresses = 5
+			end	
+			
+			if key == KeyCode.l then
+				l = true
+				waitForExtraPresses = 5
+			end
+			
+		end
+	--end
+end
+
+-- yeah I really made this. can't spell "coroutine" because of dyslexia or something, brain kept putting "couroutine"
+function y()
+	coroutine.yield()
+end
+	
+function main()	
+	u = createUI(nil)
+	u.width = castCD
+	u.height = 25
+	u.color = "#880000"
+	u.anchor = Anchor.TopCenter
+	u.y =  u.y - 100
+	--u.x = u.x - 150
+	
+	v = createUI(nil)
+	v.width = 100
+	v.height = 100
+	v.anchor = Anchor.TopRight
+	v.text = "Score " .. score
+	v.y =  v.y - 50
+	v.x = v.x - 50
+	
+	w = createUI(nil)
+	w.width = 100
+	w.height = 100
+	w.anchor = Anchor.TopRight
+	w.text = "Time  " .. math.floor(game.totalTimeElapsed)
+	w.y =  w.y - 50
+	w.x = w.x - 150
+	
+	game.winOnDeath = false
+    game.terrainDestruction = false
+    game.takeDamage = true
+	game.allowSkipTurn = false
+	user = game.getUser()
+	game.allowMovement = true
+	
+	user.diesInWater = true
+
+	s = summon()
+
+	game.ShowInfo("k = regular attack\nl = downwards attack\n k + l = strong attack (longer cooldown)\nBar at top = cooldown period", true, true)
+	
+	y()
+
+	while true do
+	
+		if user.isDead or user.inWater then
+			game.ShowInfo("You scored " .. score .. " points!\nGood game!", true, true)
+			y()
+			game.win()
+			y()
+		end
+		
+		game.panCamera(point(600, 200), false)
+
+	
+		v.text = "Score " .. score
+		w.text = "Time  " .. math.floor(game.totalTimeElapsed)
+		
+		game.getUser().stunned = false
+		playerCasts()
+		
+		--[[if allMinionsDead() then
+			for i=0,(game.totalTimeElapsed/100) + 1 do
+				s.spell = "Summon Cyclops"
+				s.onPlayersPanel = true
+				s.position = point(math.random(70, 1200), 500)
+				minion = game.createCreature(s)
+				minion.removeSpell("Thunder Shock")
+				table.insert(minions, 1, minion)
+				table.insert(minionCDs, 1, 200)
+			end
+		end]]
+		
+		for i, minion in ipairs(minions) do
+			minionCast(minion, i)
+		end
+		
+		removeDeadMinions()
+		
+		while #(minions) < (game.totalTimeElapsed/100) + 1 do
+			s.spell = "Summon Cyclops"
+			s.onPlayersPanel = true
+			s.position = point(math.random(70, 1200), 500)
+			minion = game.createCreature(s)
+			minion.health = 140
+			minion.removeSpell("Thunder Shock")
+			table.insert(minions, 1, minion)
+			table.insert(minionCDs, 1, 200)
+		end		
+		
+		y()
+	end
+end
+
+function minionCast(minion, i)
+	
+	cd = minionCDs[i]
+	
+	if cd > 0 then
+		cd = cd - 1
+	end
+	
+	if cd == 0 then		
+		game.nextTurn()
+		--minion.castSpell("Chain Lightning", user.position)	
+		game.allowMovement = true
+		y()
+		cd = 200
+	end	
+	
+	minionCDs[i] = cd
+    
+end
+
+function removeDeadMinions()
+	tempMinions = {}
+	tempMinionCDs = {}
+	
+	for i, minion in ipairs(minions) do
+		if minion == 0 then	
+			return true
+		end
+		if minion.isDead then
+			score = score + 1
+		end
+		if not minion.isDead then
+			table.insert(tempMinions, 1, minion)
+			table.insert(tempMinionCDs, 1, minionCDs[i])
+		end
+	end
+	
+	minions = tempMinions
+	minionCDs = tempMinionCDs
+end
+
+function allMinionsDead()
+
+	for i, minion in ipairs(minions) do
+		if minion == 0 then	
+			return true
+		end
+		if not minion.isDead then
+			return false
+		end
+	end
+	
+	return true
+end
+
+function playerCasts()
+	-- this set of jank is because putting it in onKeyPress made it fail and I couldn't figure out why, the waitFPS function throws an error there but not here. 
+	
+	if waitForExtraPresses == 0 then
+	
+		
+		if k == true and l == true then
+			game.allowMovement = false
+			lustPoint = summon(SpellEnum.Summon_Vampire)
+			lustPoint.playSound = false
+			
+			if facingDirection then
+				lustPoint.position = point(game.getUser().position.x + 55, game.getUser().position.y - 55)
+			else
+				lustPoint.position = point(game.getUser().position.x - 55, game.getUser().position.y - 55)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			waitFPS(20)
+			
+			if facingDirection then			
+			lustPoint.position = point(game.getUser().position.x + 80, game.getUser().position.y)
+			else
+				lustPoint.position = point(game.getUser().position.x - 80, game.getUser().position.y)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			waitFPS(20)
+			
+			if facingDirection then					
+			lustPoint.position = point(game.getUser().position.x + 35, game.getUser().position.y + 60)
+			else
+				lustPoint.position = point(game.getUser().position.x - 35, game.getUser().position.y + 60)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			waitFPS(3)
+			y()
+			
+			if facingDirection then			
+			lustPoint.position = point(game.getUser().position.x + 15, game.getUser().position.y + 75)
+			else
+				lustPoint.position = point(game.getUser().position.x - 15, game.getUser().position.y + 75)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			waitFPS(3)
+			y()
+					
+			lustPoint.position = point(game.getUser().position.x, game.getUser().position.y + 90)
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			
+			k = false
+			l = false
+			castCD = 200
+			game.allowMovement = true
+			
+		elseif k == true then
+
+			game.allowMovement = false
+			lustPoint = summon(SpellEnum.Summon_Vampire)
+			lustPoint.playSound = false
+			
+			if facingDirection then			
+			lustPoint.position = point(game.getUser().position.x + 80, game.getUser().position.y)
+			else
+				lustPoint.position = point(game.getUser().position.x - 80, game.getUser().position.y)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			
+			k = false
+			castCD = 120
+			game.allowMovement = true
+			
+		elseif l == true then
+			game.allowMovement = false
+			lustPoint = summon(SpellEnum.Summon_Vampire)
+			lustPoint.playSound = false
+			if facingDirection then
+				lustPoint.position = point(game.getUser().position.x + 55, game.getUser().position.y - 55)
+			else
+				lustPoint.position = point(game.getUser().position.x - 55, game.getUser().position.y - 55)
+			end
+			dummy = game.createCreature(lustPoint)
+			dummy.castSpell("Blood Lust", point(0, 0), 0, 0)
+			dummy.health = 0
+			
+			l = false
+			castCD = 120
+			game.allowMovement = true
+		end
+	end
+	
+	if castCD > 0 then
+		u.width = castCD
+		castCD = castCD	- 1
+	end
+
+	if waitForExtraPresses > 0 then
+		waitForExtraPresses = waitForExtraPresses - 1
+	end
+
+end
+
+-- Removes all seas spells
+function removeSpells(user)
+	user.removeSpell("Water Ball")
+	user.removeSpell("Maelstrom")
+	user.removeSpell("Summon Water Trolls")
+	user.removeSpell("Hydration")
+	user.removeSpell("Deluge")
+	user.removeSpell("English Summer")
+	user.removeSpell("Brine Bolt")
+	user.removeSpell("Brine Bomb")
+	user.removeSpell("Summon Brine Goblin")
+	user.removeSpell("Rain of Clams")
+	user.removeSpell("Summon Water Lord")
+	user.removeSpell("Ocean's Fury")
+	user.removeSpell("Summon Kraken")
+	user.removeSpell(SpellEnum.Brine_Burst)
+end
+	
+	
+-- Adds all seas spells
+function addSpells(user)
+	user.addSpell("Water Ball")
+	user.addSpell("Maelstrom")
+	user.addSpell("Summon Water Trolls")
+	user.addSpell("Hydration")
+	user.addSpell("Deluge")
+	user.addSpell("English Summer")
+	user.addSpell("Brine Bolt")
+	user.addSpell("Brine Bomb")
+	user.addSpell("Summon Brine Goblin")
+	user.addSpell("Rain of Clams")
+	user.addSpell("Summon Water Lord")
+	user.addSpell("Ocean's Fury")
+	user.addSpell("Summon Kraken")
+	user.addSpell(SpellEnum.Brine_Burst)
+end	
+
+--[[
+	Checks if given creature is touching given area indicator
+	input: creature - the creature
+	input: indicator - the indicator expected type IndicatorKind.Area
+]]
+function creatureTouchIndicator(cre,ind)
+	dist = math.sqrt(math.pow((cre.y - ind.y),2) + math.pow((cre.x - ind.x),2))
+	dist = dist - cre.radius
+	if dist <= ind.radius then return true else return false end
+end
+
+--[[
+	Checks if given creature is within given area indicator
+	input: creature - the creature
+	input: indicator - the indicator expected type IndicatorKind.Area
+]]
+function creatureInIndicator(cre,ind)
+	dist = math.sqrt(math.pow((cre.y - ind.y),2) + math.pow((cre.x - ind.x),2))
+	dist = dist + cre.radius
+	if dist <= ind.radius then return true else return false end
+end
+
+--[[
+	This will clear the map given global width and height
+]]
+function cleanMap()
+	game.terrainDestruction = true
+	clearTerrain(GLOBAL_MAP_WIDTH,GLOBAL_MAP_HEIGHT)
+	waitFPS(30)
+	game.terrainDestruction = false
+end
+
+--[[
+	This will clear the terrain of a map
+	input: number - width of the map
+	input: number - height of the map
+	optional input: number - delta between steps of the traversal
+]]
+function clearTerrain(width,height,delta)
+	game.panCamera(point(width/2,height/2),false)
+	delta = delta or 100
+	--game.paused = true
+	for x = 0,width,delta do
+		for y = 0,height,delta do
+			game.getUser().position = point(x,y)
+			game.getUser().castSpell("Arcane Flash",point(0,0))
+			waitFPS(1)
+		end
+	end
+end
+
+--[[
+	test function for stones
+]]
+function testStoneSpacing()
+	for i = 1,2000,50 do
+		drawStones(point(0,0),point(i,950))
+	end
+	for i = 1,950,50 do
+		drawStones(point(0,0),point(1900,i))
+	end
+end
+
+--[[
+	creates a line of stepping stones from one point to another
+	NOTE:Draw lines from left/bottom for best results
+	input: point(),point() - the two points
+]]
+function drawStones(p1,p2)
+	total_dist = math.sqrt(math.pow((p2.x - p1.x),2) + math.pow((p2.y - p1.y),2))
+	slope = (p2.y - p1.y) / (p2.x - p1.x)	
+	angle_radians = math.atan(slope)
+	angle_degrees = angle_radians * (180/math.pi)
+	dist_between = 19 - (4*math.sin(angle_radians))
+	numNeeded = total_dist/dist_between
+	for i = 0,numNeeded,1 do
+		d2 = dist_between * i
+		p3 = point(0,0)
+		p3.x = p1.x - ((d2 * (p1.x - p2.x))/total_dist)
+		p3.y = p1.y - ((d2 * (p1.y - p2.y))/total_dist)
+		game.getUser().castSpell("Stepping Stone",p3)
+	end
+end
+
+--[[
+	waits seconds based on the game value totalTimeElapsed
+	input: number - the seconds to elapse
+]]
+function waitTTE(secondsTTE)
+	endTTE = game.totalTimeElapsed + secondsTTE
+	while game.totalTimeElapsed < endTTE do
+		coroutine.yield(0)
+	end
+end
+
+--[[
+	waits based on just yields, supposedly this is linked to the render loop,
+	so 60 yields is a second, but this is unreliable.
+	input: number - the iterations to yield
+]]
+function waitFPS(iterations)
+	while iterations > 0 do
+		iterations = iterations - 1
+		coroutine.yield()
+	end
+end
+
+--[[
+	waits based on a time delta in seconds based on turn timer.
+	input: number - the seconds to wait
+]]
+function waitTT(secondsTurnTime)
+	startTime = game.turnTime
+	while game.turnTime > startTime - secondsTurnTime do
+		coroutine.yield(0)
+	end
+end
+
+--[[
+	waits until the timer reaches the given time in seconds.
+	input: number - the seconds to wait until
+	(NOTE timer is bit jank holding 0 for 2 seconds and I never use this so idk if bugs)
+]]
+function waitUntilTT(secondsTurnTime)
+	secondsTurnTime = secondsTurnTime + 2
+	while game.turnTime > (-1 * secondsTurnTime) do
+		coroutine.yield(0)
+	end
+end
+
+
+--[[
+	just endlessly yields, for non-programmers, basically this just says game keep going I pretending to do stuff
+]]
+function stayAlive()
+	while true do coroutine.yield(0) end
+end
+
+--[[
+	gets the number of lines of a given string.
+	input: string - the string
+	output: integer - the number of lines
+]]
+
+
+--[[
+	onKeyDown is a given function to overwrite, It is called when a key is pressed
+	I have filled it with a wrapper to simplify adding pressEvents
+	input:nil or some KeyCode._____ (you dont call this, the game handles this)
+]]
+
+
+--[[
+	adds a given function to be called when a given keycode is released(SEE function keyReleaseChecks())
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+	NOTE:pls pray pur3 adds the built in release check because this is not super elegant
+]]
+function addBindReleased(keycode,fn)
+	keyCodesRelease[keycode] = fn
+end
+
+--[[
+	adds a given function to be called when a given keycode is pressed
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+]]
+function addBind(keycode,fn)
+	keyCodes[keycode] = fn
+	keyCodesBool[keycode] = false
+end
+
+--[[
+	adds a given function to be called when a given keycode is held
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+]]
+function addBindHeld(keycode,fn)
+	keyCodesHeld[keycode] = fn
+	keyCodesBool[keycode] = false
+end
+
+--[[
+	This will check if a key is released and then call any associated functions
+	NOTE:pls pray pur3 adds the built in release check because this is not super elegant
+]]
+function keyReleaseChecks()
+	if GLOBAL_DEBUG then game.showInfo(keyHist) end
+	for k in pairs(keyCodesBool) do
+		--firstpass
+		if k ~= nil and keyCodesBool[k] ~= nil and keyCodesBool[k] then
+			if GLOBAL_DEBUG then print(tostring(k).." Detected") end
+			keyCodesBool[k] = false		
+			coroutine.yield()
+			--secondpass
+			if keyCodesBool[k] then
+				if GLOBAL_DEBUG then print(tostring(k).." Held") end
+			else
+				if GLOBAL_DEBUG then print(tostring(k).." Released") end
+				for k2 in pairs(keyCodesRelease) do
+					if k == k2 then
+						keyCodesRelease[k]()
+					end
+				end
+			end
+		end
+	end
+	if GLOBAL_DEBUG_DOWNTIME_CHECK then print("--") end	
+end

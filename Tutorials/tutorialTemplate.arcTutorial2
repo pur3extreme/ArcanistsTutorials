@@ -1,0 +1,291 @@
+--NAME = grapple_tut_template
+--DESCRIPTION = hi
+--MAP = Empty
+--SPELLS = {Arcane Bomb,Arcane Gate, Arcane Flash, Quake, Mud Ball, Mega Boulder, Shock Bomb, Ice Ball, Ice Bomb, Drain Bolt, Death Bomb, Clock Tower, Blast From The Past, Clockwork Bomb, Glide, Whisper Bomb}
+--DEBUG = FALSE
+
+--CODE--
+
+--grapplib(Above is pur3 land)
+keyCodes = {}
+keyCodesBool = {}
+keyCodesRelease = {}
+keyCodesHeld = {}
+keyHist = "hi"
+GLOBAL_DEBUG = false
+GLOBAL_DEBUG_DOWNTIME_CHECK = false
+GLOBAL_MAP_HEIGHT = 950
+GLOBAL_MAP_WIDTH = 1910
+
+--[[
+	main, here is where you want to edit
+]]
+function main()
+	addBind(KeyCode.Q,function() game.win() end)
+	--[[Just some sample code to show is working, clears map , waits 1s, then places a shit ton of stones]]
+	--clearTerrain(1950,950)
+	--waitFPS(120)
+	--testStoneSpacing()
+	--waitFPS(60)
+	drawStones(point(0,0),point(GLOBAL_MAP_WIDTH,0))
+	
+	--[[
+		Examples of adding a keybind:
+		addBind(KeyCode.A,function() game.showInfo("hi") end)
+		addBindReleased(KeyCode.B,clearTerrainSandbox)
+		addBindHeld(KeyCode.C,function() game.showInfo("hi2") end)
+	]]
+	
+	
+	--[[
+		If you want key release to be checked, need this to be a part of your loop
+		if you don't care, then just replace this loop with stayAlive(), concluding your method
+		with stayAlive will keep the onKeyPress coroutines running
+	]]
+	while true do
+		keyReleaseChecks()
+		coroutine.yield()
+	end
+end
+
+--[[
+	Checks if given creature is touching given area indicator
+	input: creature - the creature
+	input: indicator - the indicator expected type IndicatorKind.Area
+]]
+function creatureTouchIndicator(cre,ind)
+	dist = math.sqrt(math.pow((cre.y - ind.y),2) + math.pow((cre.x - ind.x),2))
+	dist = dist - cre.radius
+	if dist <= ind.radius then return true else return false end
+end
+
+--[[
+	Checks if given creature is within given area indicator
+	input: creature - the creature
+	input: indicator - the indicator expected type IndicatorKind.Area
+]]
+function creatureInIndicator(cre,ind)
+	dist = math.sqrt(math.pow((cre.y - ind.y),2) + math.pow((cre.x - ind.x),2))
+	dist = dist + cre.radius
+	if dist <= ind.radius then return true else return false end
+end
+
+--[[
+	This will clear the map given global width and height
+]]
+function cleanMap()
+	game.terrainDestruction = true
+	clearTerrain(GLOBAL_MAP_WIDTH,GLOBAL_MAP_HEIGHT)
+	waitFPS(30)
+	game.terrainDestruction = false
+end
+
+--[[
+	This will clear the terrain of a map
+	input: number - width of the map
+	input: number - height of the map
+	optional input: number - delta between steps of the traversal
+]]
+function clearTerrain(width,height,delta)
+	game.panCamera(point(width/2,height/2),false)
+	delta = delta or 100
+	--game.paused = true
+	for x = 0,width,delta do
+		for y = 0,height,delta do
+			game.getUser().position = point(x,y)
+			game.getUser().castSpell("Arcane Flash",point(0,0))
+			waitFPS(1)
+		end
+	end
+end
+
+--[[
+	test function for stones
+]]
+function testStoneSpacing()
+	for i = 1,2000,50 do
+		drawStones(point(0,0),point(i,950))
+	end
+	for i = 1,950,50 do
+		drawStones(point(0,0),point(1900,i))
+	end
+end
+
+--[[
+	creates a line of stepping stones from one point to another
+	NOTE:Draw lines from left/bottom for best results
+	input: point(),point() - the two points
+]]
+function drawStones(p1,p2)
+	total_dist = math.sqrt(math.pow((p2.x - p1.x),2) + math.pow((p2.y - p1.y),2))
+	slope = (p2.y - p1.y) / (p2.x - p1.x)	
+	angle_radians = math.atan(slope)
+	angle_degrees = angle_radians * (180/math.pi)
+	dist_between = 19 - (4*math.sin(angle_radians))
+	numNeeded = total_dist/dist_between
+	for i = 0,numNeeded,1 do
+		d2 = dist_between * i
+		p3 = point(0,0)
+		p3.x = p1.x - ((d2 * (p1.x - p2.x))/total_dist)
+		p3.y = p1.y - ((d2 * (p1.y - p2.y))/total_dist)
+		game.getUser().castSpell("Stepping Stone",p3)
+	end
+end
+
+--[[
+	waits seconds based on the game value totalTimeElapsed
+	input: number - the seconds to elapse
+]]
+function waitTTE(secondsTTE)
+	endTTE = game.totalTimeElapsed + secondsTTE
+	while game.totalTimeElapsed < endTTE do
+		coroutine.yield(0)
+	end
+end
+
+--[[
+	waits based on just yields, supposedly this is linked to the render loop,
+	so 60 yields is a second, but this is unreliable.
+	input: number - the iterations to yield
+]]
+function waitFPS(iterations)
+	while iterations > 0 do
+		iterations = iterations - 1
+		coroutine.yield(0)
+	end
+end
+
+--[[
+	waits based on a time delta in seconds based on turn timer.
+	input: number - the seconds to wait
+]]
+function waitTT(secondsTurnTime)
+	startTime = game.turnTime
+	while game.turnTime > startTime - secondsTurnTime do
+		coroutine.yield(0)
+	end
+end
+
+--[[
+	waits until the timer reaches the given time in seconds.
+	input: number - the seconds to wait until
+	(NOTE timer is bit jank holding 0 for 2 seconds and I never use this so idk if bugs)
+]]
+function waitUntilTT(secondsTurnTime)
+	secondsTurnTime = secondsTurnTime + 2
+	while game.turnTime > (-1 * secondsTurnTime) do
+		coroutine.yield(0)
+	end
+end
+
+
+--[[
+	just endlessly yields, for non-programmers, basically this just says game keep going I pretending to do stuff
+]]
+function stayAlive()
+	while true do coroutine.yield(0) end
+end
+
+--[[
+	gets the number of lines of a given string.
+	input: string - the string
+	output: integer - the number of lines
+]]
+local function getLineCount(str)
+    local lines = 1
+    for i = 1, #str do
+        local c = str:sub(i, i)
+        if c == '\n' then lines = lines + 1 end
+    end
+    return lines
+end
+
+--[[
+	onKeyHeld is a given function to overwrite, It is called when a key is held
+	I have filled it with a wrapper to simplify adding pressEvents
+	input:nil or some KeyCode._____ (you dont call this, the game handles this)
+]]
+function onKeyHeld(key)
+	for k,v in pairs(keyCodesHeld) do
+		if key == k then
+			v()
+		end
+	end
+	keyCodesBool[key] = true
+end
+
+--[[
+	onKeyDown is a given function to overwrite, It is called when a key is pressed
+	I have filled it with a wrapper to simplify adding pressEvents
+	input:nil or some KeyCode._____ (you dont call this, the game handles this)
+]]
+function onKeyDown(key)
+	if getLineCount(keyHist) > 5 then
+		keyHist = ""
+	end
+	keyHist = keyHist.."\n"..tostring(key)
+	for k,v in pairs(keyCodes) do
+		if key == k then
+			v()
+		end
+	end
+	keyCodesBool[key] = true
+end
+
+--[[
+	adds a given function to be called when a given keycode is released(SEE function keyReleaseChecks())
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+	NOTE:pls pray pur3 adds the built in release check because this is not super elegant
+]]
+function addBindReleased(keycode,fn)
+	keyCodesRelease[keycode] = fn
+end
+
+--[[
+	adds a given function to be called when a given keycode is pressed
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+]]
+function addBind(keycode,fn)
+	keyCodes[keycode] = fn
+	keyCodesBool[keycode] = false
+end
+
+--[[
+	adds a given function to be called when a given keycode is held
+	input: KeyCode._______ - the keycode to watch for
+	input: function() - The function to be executed(no '()' in here hi)
+]]
+function addBindHeld(keycode,fn)
+	keyCodesHeld[keycode] = fn
+	keyCodesBool[keycode] = false
+end
+
+--[[
+	This will check if a key is released and then call any associated functions
+	NOTE:pls pray pur3 adds the built in release check because this is not super elegant
+]]
+function keyReleaseChecks()
+	if GLOBAL_DEBUG then game.showInfo(keyHist) end
+	for k in pairs(keyCodesBool) do
+		--firstpass
+		if k ~= nil and keyCodesBool[k] ~= nil and keyCodesBool[k] then
+			if GLOBAL_DEBUG then print(tostring(k).." Detected") end
+			keyCodesBool[k] = false		
+			coroutine.yield()
+			--secondpass
+			if keyCodesBool[k] then
+				if GLOBAL_DEBUG then print(tostring(k).." Held") end
+			else
+				if GLOBAL_DEBUG then print(tostring(k).." Released") end
+				for k2 in pairs(keyCodesRelease) do
+					if k == k2 then
+						keyCodesRelease[k]()
+					end
+				end
+			end
+		end
+	end
+	if GLOBAL_DEBUG_DOWNTIME_CHECK then print("--") end	
+end

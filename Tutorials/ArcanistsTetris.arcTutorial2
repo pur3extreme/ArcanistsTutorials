@@ -1,0 +1,678 @@
+--NAME = Tutorial
+--DESCRIPTION = 
+--MAP = Empty
+--HEIGHT = 1025
+--WIDTH = 500
+--SPELLS = {}
+--DEBUG = FALSE
+
+--CODE--
+--originalbounds = 1000 x 2225
+GLOBAL_DEBUG = false
+GLOBAL_UPPERBOUND = 75 + 1000
+GLOBAL_LEFTBOUND = 25 
+GLOBAL_RIGHTBOUND = 500 - 25
+GLOBAL_START_X = 225
+GLOBAL_START_Y = 225 + 1000 + 25
+GLOBAL_KEYBINDS_INFO = 
+ "Alpha Build - Keybinds:\n"
+.."[ J , L ] - Move left or right\n"
+.."[ K ] - Move downward faster\n"
+.."[ U , O ] - Rotate counterclockwise and clockwise\n"
+.."[ P ] - Toggle auto camera panning\n"
+.."[ Y ] - Toggle sloppy movement\n"
+.."-grapplepi\n"
+
+keyCodes = {}
+keyCodeFns = {}
+keyCodesHeld = {}
+keyCodeFnsHeld = {}
+O_cooldown = 1.2
+U_cooldown = 1.2
+J_cooldown = 1.2
+L_cooldown = 1.2
+
+shapes = {}
+object_counter = 0
+
+global_game_lose = false
+global_pan_camera = false
+global_sloppy_movement = false
+global_lowerbound = 50
+global_counter = 0
+global_score = 0
+STEP_TIME_FPS = 15
+global_step_fps = 15
+
+--TODO
+--Personalization
+--Fanciness
+--is some sloppiness when hitting the top and being able to move afterwards after losing
+	--made it err on the side of the player, which is better than the opposite, but is still sketch
+--rethink movement
+--can implement hard drop by exiting the first move loop early
+--distribution of pieces
+--scoring from not 1980s
+
+
+function updateInfo()
+	game.showInfo(GLOBAL_KEYBINDS_INFO.."\n<size=20>Score: "..global_score.."</size=20>")
+end
+
+function lineClearsNeeded()
+	filledLines = 0
+	filledLineHeights = {}
+	for y = 50,2300,50 do
+		repeat
+			rowCount = 0
+			for x = 25,975,50 do
+				if GLOBAL_DEBUG then print("DEBUG:Checking ["..x.."]["..y.."]") end
+				--indicator = game.createIndicator(IndicatorKind.point, point(x,y), "#FF0000")
+				if #game.findCreatures(point(x,y),1) >= 1 then
+					rowCount = rowCount + 1
+					if GLOBAL_DEBUG then print("DEBUG:["..x.."]["..y.."] has dk") end
+				else
+					do break end --continue/ go to next iter
+				end
+				--if rowCount == 20 then 
+				if rowCount == 10 then 
+					filledLines = filledLines + 1 
+					table.insert(filledLineHeights,y)
+				end
+				
+			end
+		until true
+	end
+	--[[for i = 1,#filledLineHeights do
+		print(filledLineHeights[i])
+		indicator = game.createIndicator(IndicatorKind.point, point(-50,filledLineHeights[i]), "#00FF00")
+	end]]
+	return {filledLines,filledLineHeights}
+end
+
+--takes the y of lines to clear and dies all the dks in those lines
+function clearLines(lineHeights)
+	for i = 1,#lineHeights do
+		for x = 25,975,50 do
+			creatures = game.findCreatures(point(x,lineHeights[i]),1)
+			if #creatures >= 1 then
+				creatures[1].castSpell(3,point(GLOBAL_START_X,10000*10))
+				fire = true
+				creatures[1].die()
+			end
+		end
+	end
+end
+
+--takes the y of the lines that were cleared and moves all the stuff above it down by 1
+function clearMoveDks(lineHeights)
+	--for each shape, iterate the heights and for each one it falls above move down
+	for j = 1,#shapes,1 do
+		for k = 1,4,1 do
+			if not shapes[j][k]["creature"].isDead then
+				--for each height
+				for l = #lineHeights,1,-1 do
+					if shapes[j][k]["creature"].y >= lineHeights[l] then
+						shapes[j][k]["creature"].y = shapes[j][k]["creature"].y - 50
+					end
+				end
+			end
+		end
+	end
+end
+
+function main()
+	if GLOBAL_DEBUG then 
+		addBind(KeyCode.D, function() game.paused = not game.paused end)
+		addBind(KeyCode.DownArrow, function() STEP_TIME_FPS = 1 end)
+		GLOBAL_KEYBINDS_INFO = GLOBAL_KEYBINDS_INFO.."DEBUG: [ Down Arrow ] - speeds up the game\n"
+		GLOBAL_KEYBINDS_INFO = GLOBAL_KEYBINDS_INFO.."DEBUG: [ D ] - Toggles the pause of the game"
+	end
+	updateInfo()
+	--clearTerrain()
+	--waitFPS(20)
+	game.getUser().x = 900 game.getUser().y = 16969 
+	setupSlabs()
+	game.paused = true
+	setupKeyBinds()
+	--testShapes()
+	play()
+	stayAlive()
+end
+
+function setupKeyBinds()
+	--addBindHeld(KeyCode.O,function() if O_cooldown <= 0 and global_sloppy_movement then if (#shapes > 0) then rotateClockwise(shapes[#shapes-0]) end O_cooldown = 1.2 else O_cooldown = O_cooldown - 0.4 end end)
+	--addBindHeld(KeyCode.U,function() if U_cooldown <= 0 and global_sloppy_movement then if (#shapes > 0) then rotateCounterClockwise(shapes[#shapes-0]) end U_cooldown = 1.2 else U_cooldown = U_cooldown - 0.4 end end)
+	addBindHeld(KeyCode.J,function() if J_cooldown <= 0 and global_sloppy_movement then if (#shapes > 0) then moveLeft(shapes[#shapes-0]) end J_cooldown = 1.2 else J_cooldown = J_cooldown - 0.4 end end)
+	addBindHeld(KeyCode.L,function() if L_cooldown <= 0 and global_sloppy_movement then if (#shapes > 0) then moveRight(shapes[#shapes-0]) end L_cooldown = 1.2 else L_cooldown = L_cooldown - 0.4 end end)
+	addBind(KeyCode.O,function () if (#shapes > 0) then rotateClockwise(shapes[#shapes-0]) end end)
+	addBind(KeyCode.U,function () if (#shapes > 0) then rotateCounterClockwise(shapes[#shapes-0]) end end)
+	addBind(KeyCode.J,function () if (#shapes > 0) and not global_sloppy_movement then moveLeft(shapes[#shapes-0]) end end)
+	addBind(KeyCode.L,function () if (#shapes > 0) and not global_sloppy_movement then moveRight(shapes[#shapes-0]) end end)
+	addBind(KeyCode.P,function () global_pan_camera = not global_pan_camera end)
+	addBindHeld(KeyCode.K,function() if (#shapes > 0) then moveDown(shapes[#shapes]) end end)
+	addBind(KeyCode.Y,function() global_sloppy_movement = not global_sloppy_movement end)
+        --addBind(KeyCode.T,function() t = generate7bag() for i=1,7 do print(t[i]..",") end print("__") end)
+end
+
+function setupSlabs()
+	--slab looks like 1.5 - 1.75 dks
+	user = game.getUser()
+	for i = 50,GLOBAL_RIGHTBOUND,100 do
+		user.castSpell("Rock Slab",point(i,global_lowerbound-30))
+		fire = true
+	end
+end
+
+function deleteSlabs()
+	for i = 20,GLOBAL_RIGHTBOUND+25,25 do
+		s = summon()
+		s.team = 0
+		s.spell = "Summon Imps"
+		s.position = point(i,global_lowerbound-30-50)
+		cre = game.createCreature(s)
+		fire = true
+		cre.castSpell(120, point(0,0))
+		fire = true 
+		waitFPS(1)
+	end
+		
+end
+
+function testShapes()
+	for x = 25,925,50 do
+		table.insert(shapes,generators[6](x,200,-200))
+		waitFPS(1)
+	end
+end
+
+--let's try using Fisher-Yates
+function generate7bag()
+    numbers = {1,2,3,4,5,6,7}
+    outputArray = {}
+    while #outputArray < 7 do
+        num = math.random(1,#numbers)
+        table.insert(outputArray,numbers[num])
+        table.remove(numbers,num)
+    end
+    return outputArray
+end
+
+function moveAllUp()
+    	--for each shape, iterate the heights and for each one it falls above move down
+	for j = 1,#shapes,1 do
+		for k = 1,4,1 do
+			if not shapes[j][k]["creature"].isDead then
+				--for each height
+				shapes[j][k]["creature"].y = shapes[j][k]["creature"].y + 50
+			end
+		end
+	end
+end
+
+function play()
+        blockOrderBuffer = generate7bag()
+	while not global_game_lose do
+                
+                global_counter = global_counter + 1
+                if global_counter >= 40 then 
+                    --if 0, move up, set boundary 1 higher, and redraw slabs
+                    moveAllUp()
+                    global_lowerbound = global_lowerbound +  50
+                    setupSlabs()
+                    deleteSlabs()
+                    global_counter = 0
+                    if global_step_fps > 0.1 then 
+                        global_step_fps = global_step_fps - 1
+                        if global_step_fps == 0 then global_step_fps = 0.1 end
+                    end
+                end
+
+
+                if #blockOrderBuffer < 1 then blockOrderBuffer = generate7bag() end
+		x = GLOBAL_START_X
+		y = GLOBAL_START_Y + 50
+		r = blockOrderBuffer[1]
+                table.remove(blockOrderBuffer,1)
+                --r = 6
+                
+		newShape = generators[r](x,y,object_counter)
+                drawFallenIndicator(newShape)
+		table.insert(shapes,newShape)
+		object_counter = object_counter + 1
+		--if there is a previous shape, let's just make sure the user didn't leave it in a stupid spot, now that we kicked them out of the steering wheel, throw another moveDown at it
+		if #shapes >=2 then
+			falling = true
+			while shapes[#shapes-1] != nil and falling do
+				falling = moveDown(shapes[#shapes-1])
+				waitFPS(1)
+			end
+		end
+		--line clearing
+		lcn = lineClearsNeeded()
+		if lcn[1] == 1 then global_score = global_score + 40
+		elseif lcn[1] == 2 then global_score = global_score + 100 
+		elseif lcn[1] == 3 then global_score = global_score + 300
+		elseif lcn[1] == 4 then global_score = global_score + 1200 end
+		updateInfo()
+		if GLOBAL_DEBUG then print("DKS:"..lcn[1]) end
+		clearLines(lcn[2])
+		clearMoveDks(lcn[2])
+		--normal loop
+		falling = true
+		while shapes[#shapes] != nil and falling do
+			falling = moveDown(shapes[#shapes])
+			waitFPS(global_step_fps)
+		end
+		--print(global_game_lose)
+	end	
+	game.showInfo("<size=100>GAME OVER</size=100>\nFinal Score: "..global_score.."\n DM me feedback")
+	--waitFPS(150)
+	--[[game.paused = false
+	for i = 1,#shapes do
+		for j = 1,4,1 do
+			if not shapes[i][j]["creature"].isDead then
+				shapes[i][j]["creature"].die()
+			end
+			--shapes[i][j]["creature"].castSpell(3,point(GLOBAL_START_X,10000*10))
+			--fire = true
+		end
+	end
+	deleteSlabs()]]
+end
+
+function drawFallenIndicator(shape)
+    --clear indicators(dont think this tutorial uses indicators for anything else yet so this is probably fine)
+    game.clearIndicators()
+    --put the coordinates into array
+    coords = {shape[1]["creature"].position,shape[2]["creature"].position,shape[3]["creature"].position,shape[4]["creature"].position}
+    --move them down until they have to stop
+    stillMoving = true
+    while stillMoving do
+        --check if we find a creature below
+        for j = 1,4,1 do
+            belowCreature = game.findCreatures(point(coords[j].x,coords[j].y - 50),1)
+            --if found creature is not one of the ones we started with, stop moving
+            if #belowCreature >= 1 and belowCreature[1] != shape[1]["creature"] and belowCreature[1] != shape[2]["creature"] and belowCreature[1] != shape[3]["creature"] and belowCreature[1] != shape[4]["creature"] then
+                stillMoving = false
+            end
+        end 
+        --if at bottom dont move and stop moving, else move down
+        if coords[1].y <= global_lowerbound or coords[2].y <= global_lowerbound  or coords[3].y <= global_lowerbound  or coords[4].y <= global_lowerbound  then
+            stillMoving = false
+        end
+        if stillMoving then
+            for j = 1,4,1 do
+                coords[j].y = coords[j].y - 50
+            end
+        end
+    end
+    --draw indicator there
+        --can I make the indicator color coded maybe? idk if necesarry
+    for i = 1,4 do
+        game.createIndicator(IndicatorKind.Area,coords[i],shape[1]["color"],25)
+    end
+end
+
+function moveDown(shape)
+	--check each if the one below will stop it
+	for j = 1,4,1 do
+		belowCreature = game.findCreatures(point(shape[j]["creature"].x,shape[j]["creature"].y - 50),1)
+		if #belowCreature >= 1 and belowCreature[1] != shape[1]["creature"] and belowCreature[1] != shape[2]["creature"] and belowCreature[1] != shape[3]["creature"] and belowCreature[1] != shape[4]["creature"] then
+			for i = 1,4,1 do
+				--if the one below stops it and also breaks game then false
+				if shape[i]["creature"].y >= GLOBAL_UPPERBOUND then
+					if shapes[#shapes - 1 ] == shape then global_game_lose = true end
+					return false
+				end
+				return false
+			end
+		return true
+		end
+	end
+        --if anything hits the bottom of the map
+	if shape[1]["creature"].y <= global_lowerbound  or shape[2]["creature"].y <= global_lowerbound  or shape[3]["creature"].y <= global_lowerbound  or shape[4]["creature"].y <= global_lowerbound  then
+		return false
+	end
+        --move and pan camera
+	for j = 1,4,1 do
+		shape[j]["creature"].y = shape[j]["creature"].y - 50
+		if j == 4 and global_pan_camera then game.panCamera(point(shape[j]["creature"].x,shape[j]["creature"].y - 500)) end
+	end
+        --draw the indicator for where it will end up if it is able to move down still
+        --drawFallenIndicator(shape) not needed as causes many extra calls , just do on all other alters of shape, left ,right, rotate, and creation
+	return true
+end
+
+function rotateClockwise(shape)
+	rotate(shape,-90)
+        drawFallenIndicator(shape)
+end
+
+function rotateCounterClockwise(shape)
+	rotate(shape,90)
+        drawFallenIndicator(shape)
+end
+
+function rotateHelper(shape,angle,centerNum)
+		angle = angle * (math.pi/180)
+		cX = shape[centerNum]["creature"].x
+		cY = shape[centerNum]["creature"].y
+		newShapeCoords = {}
+		--[[for i = 1,4,1 do
+			shape[i]["creature"].x = cX + (Xs[i]-cX)*math.cos(angle) - (Ys[i]-cY)*math.sin(angle)
+			shape[i]["creature"].y = cY + (Xs[i]-cX)*math.sin(angle) + (Ys[i]-cY)*math.cos(angle)
+		end]]
+		for i = 1,4,1 do
+			coord = {}
+			coord["x"] = cX + (Xs[i]-cX)*math.cos(angle) - (Ys[i]-cY)*math.sin(angle)
+			coord["y"] = cY + (Xs[i]-cX)*math.sin(angle) + (Ys[i]-cY)*math.cos(angle)
+			table.insert(newShapeCoords,coord)
+		end
+		for i = 1,4,1 do
+			--bounds
+			if newShapeCoords[i]["x"] < GLOBAL_LEFTBOUND or newShapeCoords[i]["x"] > GLOBAL_RIGHTBOUND or newShapeCoords[i]["y"] <= 50 then
+				return false
+			end
+			--if within another shape
+			creaturesAtPoint = game.findCreatures(point(newShapeCoords[i]["x"],newShapeCoords[i]["y"]),1)
+			if #creaturesAtPoint >= 1 and creaturesAtPoint[1] != shape[1]["creature"] and creaturesAtPoint[1] != shape[2]["creature"] and creaturesAtPoint[1] != shape[3]["creature"] and creaturesAtPoint[1] != shape[4]["creature"] then
+				return false
+			end
+		end
+		for i = 1,4,1 do
+			shape[i]["creature"].x = newShapeCoords[i]["x"]
+			shape[i]["creature"].y = newShapeCoords[i]["y"]
+		end
+end
+
+function rotate(shape,angle)
+	Xs = {shape[1]["creature"].x,shape[2]["creature"].x,shape[3]["creature"].x,shape[4]["creature"].x}
+	Ys = {shape[1]["creature"].y,shape[2]["creature"].y,shape[3]["creature"].y,shape[4]["creature"].y}
+	--if red(0) then we can rotate around second or third point
+	if shape[1]["creature"].weight == 0 then
+		if GLOBAL_DEBUG then print("Red Rotation") end
+		rotateHelper(shape,angle,2)
+	--if green(1) we can rotate off 2 or 3
+	elseif shape[1]["creature"].weight == 1 then
+		if GLOBAL_DEBUG then print("Green Rotation") end
+		rotateHelper(shape,angle,2)
+	--if blue(2) then we rotate off 3
+	elseif shape[1]["creature"].weight == 2 then
+		if GLOBAL_DEBUG then print("Blue Rotation") end
+		rotateHelper(shape,angle,3)
+	--if yellow(3) do nothing
+	elseif shape[1]["creature"].weight == 3 then
+		if GLOBAL_DEBUG then print("Yellow Rotation") end
+	--if magenta(4) we rotate off 3
+	elseif shape[1]["creature"].weight == 4 then
+		if GLOBAL_DEBUG then print("Magenta Rotation") end
+		rotateHelper(shape,angle,3)
+	--if teal(5) we rotate off first point I think
+	elseif shape[1]["creature"].weight == 5 then
+		if GLOBAL_DEBUG then print("Teal Rotation") end
+		rotateHelper(shape,angle,1)
+	--if orange(6) we rotate off 3
+	elseif shape[1]["creature"].weight == 6 then
+		if GLOBAL_DEBUG then print("Orange Rotation") end
+		rotateHelper(shape,angle,3)
+	end
+	
+end
+
+function printList(list,listName)
+	--fk u pur3 I want to use debug.getlocal(list)
+	stringie = listName.."["
+	for i=1,#list,1 do
+		if i != #list then
+			stringie = stringie..list[i]..","
+		else
+			stringie = stringie..list[i]
+		end
+	end
+	stringie = stringie.."]"
+	print(stringie)
+end
+
+function clearTerrain() 
+	user = game.getUser()
+	--user.castSpell("Invulnerability Shield",point(0,0))
+	user.x = 900 user.y = 16969 
+	points = {
+	point(200,200),
+	point(500,200),
+	point(800,200),
+	point(200,800),
+	point(500,800),
+	point(800,800),
+	point(200,1200),
+	point(500,1200),
+	point(800,1200),
+	point(200,1700),
+	point(500,1700),
+	point(800,1700),
+	point(200,2300),
+	point(500,2300),
+	point(800,2300)
+	}
+	for i = 1, #points do
+		s = summon() s.team = 0 s.spell = "Summon Imps" s.position = points[i] cre = game.createCreature(s) cre.health = 250 fire = true  cre.castSpell(121, points[i]) fire = true 
+		waitFPS(1)
+	end
+	if --[[this code does some stuff]]game.getPlayers()--[[and some other stuff]][1].name --[[and some other stuff]] == --[[and some more stuff and some more stuff and some more stuff and some more stuff and some more stuff and some more stuff]]"Usman899" then game.showInfo("Usman899....\n Hope you are staying vigilant.\n :)") waitFPS(60) end
+end
+
+function moveLeft(shape)
+	for j = 1,4,1 do
+		leftCreature = game.findCreatures(point(shape[j]["creature"].x-50,shape[j]["creature"].y),1)
+		if #leftCreature >= 1 and leftCreature[1] != shape[1]["creature"] and leftCreature[1] != shape[2]["creature"] and leftCreature[1] != shape[3]["creature"] and leftCreature[1] != shape[4]["creature"] then
+			return false
+		end
+	end
+	for j = 1,4,1 do
+		if shape[j]["creature"].x -50 < GLOBAL_LEFTBOUND then
+			return false
+		end
+	end
+	for i = 1,4,1 do
+		shape[i]["creature"].x = shape[i]["creature"].x - 50
+	end
+        drawFallenIndicator(shape)
+end
+
+function moveRight(shape)
+	for j = 1,4,1 do
+		rightCreature = game.findCreatures(point(shape[j]["creature"].x+50,shape[j]["creature"].y),1)
+		if #rightCreature >= 1 and rightCreature[1] != shape[1]["creature"] and rightCreature[1] != shape[2]["creature"] and rightCreature[1] != shape[3]["creature"] and rightCreature[1] != shape[4]["creature"] then
+			return false
+		end
+	end
+	for j = 1,4,1 do
+		if shape[j]["creature"].x + 50 > GLOBAL_RIGHTBOUND then
+			return false
+		end
+	end
+	for i = 1,4,1 do
+		shape[i]["creature"].x = shape[i]["creature"].x + 50
+	end
+        drawFallenIndicator(shape)
+end
+
+function generateMagentaShape(x,y,id)
+	dk1 = drawDK(x,y,4,id)
+	dk2 = drawDK(x,y-50,4,id)
+	dk3 = drawDK(x+50,y-50,4,id)
+	dk4 = drawDK(x,y-100,4,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateGreenShape(x,y,id)
+	dk1 = drawDK(x,y,1,id)
+	dk2 = drawDK(x,y-50,1,id)
+	dk3 = drawDK(x+50,y-50,1,id)
+	dk4 = drawDK(x+50,y-100,1,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateBlueShape(x,y,id)
+	dk1 = drawDK(x,y,2,id)
+	dk2 = drawDK(x,y-50,2,id)
+	dk3 = drawDK(x,y-100,2,id)
+	dk4 = drawDK(x-50,y-100,2,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateOrangeShape(x,y,id)
+	dk1 = drawDK(x,y,6,id)
+	dk2 = drawDK(x,y-50,6,id)
+	dk3 = drawDK(x,y-100,6,id)
+	dk4 = drawDK(x+50,y-100,6,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateTealShape(x,y,id)
+	dk1 = drawDK(x,y,5,id)
+	dk2 = drawDK(x,y-50,5,id)
+	dk3 = drawDK(x,y-100,5,id)
+	dk4 = drawDK(x,y-150,5,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateRedShape(x,y,id)
+	dk1 = drawDK(x,y,0,id)
+	dk2 = drawDK(x+50,y,0,id)
+	dk3 = drawDK(x+50,y-50,0,id)
+	dk4 = drawDK(x+100,y-50,0,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+function generateYellowShape(x,y,id)
+	dk1 = drawDK(x,y,3,id)
+	dk2 = drawDK(x+50,y,3,id)
+	dk3 = drawDK(x+50,y-50,3,id)
+	dk4 = drawDK(x,y-50,3,id)
+	return {dk1,dk2,dk3,dk4}
+end
+
+generators = {
+	generateRedShape,
+	generateGreenShape,
+	generateBlueShape,
+	generateYellowShape,
+	generateMagentaShape,
+	generateTealShape,
+	generateOrangeShape
+}
+
+function drawDK(x,y,team,objectID)
+	DK_OBJ = {}
+	s = summon()
+	--s.name = "testing"
+	s.onPlayersPanel = false
+	s.team = team
+	if team == 0 then
+		s.colors = {"#FF0000", "#FF0000", "#FF0000", "#FF0000"}
+		s.spell = "Summon Flame Dragon"
+                DK_OBJ["color"] = "#FF0000"
+	elseif team == 1 then
+		s.colors = {"#00FF00", "#00FF00", "#00FF00", "#00FF00"}
+		s.spell = "Summon Man-Trap"
+                DK_OBJ["color"] = "#00FF00"
+	elseif team == 2 then
+		s.colors = {"#0000FF", "#0000FF", "#0000FF", "#0000FF"}
+		s.spell = "Summon Water Lord"
+                DK_OBJ["color"] = "#0000FF"
+	elseif team == 3 then
+		s.colors = {"#FFFF00", "#FFFF00", "#FFFF00", "#FFFF00"}
+		s.spell = "Summon Storm Dragon"
+                DK_OBJ["color"] = "#FFFF00"
+	elseif team == 4 then
+		s.colors = {"#FC46AA", "#FC46AA", "#FC46AA", "#FC46AA"}
+		s.spell = "Summon Phantom"
+                DK_OBJ["color"] = "#FC46AA"
+		--s.name = "grapplepi"
+		--s.outfit = {54, 65, 74, 72, 11, 0, 0, 0, 0}
+		--s.colors = {"#FC46AA", "#FC46AA", "#FC46AA", "#FF00B2"}
+		--TODO make this me
+	elseif team == 5 then
+		s.colors = {"#03FDFC", "#03FDFC", "#03FDFC", "#03FDFC"}
+		s.spell = "Summon Sylph"
+                DK_OBJ["color"] = "#03FDFC"
+	elseif team == 6 then
+		s.colors = {"#FF6600", "#FF6600", "#FF6600", "#FF6600"}
+		s.spell = "Summon Rock Golem"
+                DK_OBJ["color"] = "#FF6600"
+	end
+	
+	--s.spell = "Spawn"
+	s.position = point(x,y)
+	cre = game.createCreature(s)
+	cre.weight = team
+	cre.radius = 25
+	--if team == 0 then cre.radius = 28 end
+	fire = true 
+	DK_OBJ["creature"] = cre
+	DK_OBJ["objectID"] = objectID
+	return DK_OBJ
+end
+
+function waitTTE(secondsTTE)
+	endTTE = game.totalTimeElapsed + secondsTTE
+	while game.totalTimeElapsed < endTTE do
+		coroutine.yield(0)
+	end
+end
+
+function waitFPS(iterations)
+	--60 iterations ~ 1 second, NOT ACCURATE, likely based on rendering speed
+	while iterations > 0 do
+		iterations = iterations - 1
+		coroutine.yield(0)
+	end
+end
+
+function waitTT(secondsTurnTime)
+	startTime = game.turnTime
+	while game.turnTime > startTime - secondsTurnTime do
+		coroutine.yield(0)
+	end
+end
+
+function waitUntilTT(secondsTurnTime)
+	secondsTurnTime = secondsTurnTime + 2
+	while game.turnTime > (-1 * secondsTurnTime) do
+		coroutine.yield(0)
+	end
+end
+
+function stayAlive()
+	while true do coroutine.yield(0) end
+end
+
+function setup() --[[fitted to the ambifacient lunar waneshaft that sidefumbling was effectively prevented.The main winding was of the normal lotus o-deltoid type placed in panendermic semiboloid slots of the stator, every seventh conductor being connected by a non-reversible tremie pipe to the]] poll = createPoll("grapplepi Rank 1!") item = poll.addItem("grapplepi is rank 1 skillshoter") item.multipleSelection = true item.addAnswer("Yep") item.addAnswer("Yes") --[[ differential girdlespring on the ‘up’ end of the grammeters. Moreover, whenever fluorescence score motion is required, it may also be]]poll.sendToServer() --[[ employed in conjunction with a drawn reciprocation dingle arm to reduce sinusoidal depleneration. ]] end
+
+function onKeyHeld(key)
+	for i=1, #keyCodeFnsHeld do
+		if(key == keyCodesHeld[i]) then
+			keyCodeFnsHeld[i]()
+		end
+	end
+end
+
+function onKeyDown(key)
+	for i=1, #keyCodeFns do
+		if(key == keyCodes[i]) then
+			keyCodeFns[i]()
+		end
+	end
+end
+
+function addBind(keycode,fn)
+	table.insert(keyCodes,keycode)
+	table.insert(keyCodeFns,fn)
+end
+
+function addBindHeld(keycode,fn)
+	table.insert(keyCodesHeld,keycode)
+	table.insert(keyCodeFnsHeld,fn)
+end
