@@ -1,5 +1,5 @@
---NAME = grapple_napalm_testing
---DESCRIPTION = hi
+--NAME = grapple_napalm
+--DESCRIPTION = WARNING: This may crash on slow computers. Made By grapplepi
 --MAP = Empty
 --HEIGHT = 1500
 --WIDTH = 8192
