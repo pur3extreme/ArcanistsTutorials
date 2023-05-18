@@ -1,5 +1,5 @@
 --NAME = grapple_tut_template
---DESCRIPTION = hi
+--DESCRIPTION = Old but good template for getting started creating tutorials. Made By grapplepi.
 --MAP = Empty
 --SPELLS = {Arcane Bomb,Arcane Gate, Arcane Flash, Quake, Mud Ball, Mega Boulder, Shock Bomb, Ice Ball, Ice Bomb, Drain Bolt, Death Bomb, Clock Tower, Blast From The Past, Clockwork Bomb, Glide, Whisper Bomb}
 --DEBUG = FALSE
