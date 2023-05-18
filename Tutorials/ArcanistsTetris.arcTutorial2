@@ -1,5 +1,5 @@
---NAME = Tutorial
---DESCRIPTION = 
+--NAME = Tetris!
+--DESCRIPTION = Tetris in Arcanists! Made By grapplepi
 --MAP = Empty
 --HEIGHT = 1025
 --WIDTH = 500
@@ -41,8 +41,8 @@ global_sloppy_movement = false
 global_lowerbound = 50
 global_counter = 0
 global_score = 0
-STEP_TIME_FPS = 15
-global_step_fps = 15
+STEP_TIME_FPS = 20
+global_step_fps = 20
 
 --TODO
 --Personalization
@@ -623,7 +623,7 @@ function waitTTE(secondsTTE)
 	end
 end
 
-function waitFPS(iterations)
+function waitFPSgrappl(iterations)
 	--60 iterations ~ 1 second, NOT ACCURATE, likely based on rendering speed
 	while iterations > 0 do
 		iterations = iterations - 1
