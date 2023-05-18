@@ -54,6 +54,7 @@ function main()
 	--clearTerrain(1950,950)
         --give seas fam 
         game.getUser().increaseFamiliarLevel(Book.Seas,false, true)
+        game.getUser().removeSpell("Brine Burst")
         game.getUser().addSpell("Summon Storm Spirit")
         game.getUser().addSpell("Summon Dark Knight")
         game.getUser().addSpell("Flight")
