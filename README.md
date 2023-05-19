@@ -1,6 +1,6 @@
 Index entires are as follows: 
 ```name, version, version-used-to-edit-or-test```
-Only `name` and `version` values are functionally important.
+Only `name` and `version` values are functionally important(required).
 - `name` must match the name of the file in `Tutorials\`.
 - `version` must change for a client to update the file when cache is exhausted.
 
