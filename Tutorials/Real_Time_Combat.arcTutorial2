@@ -1,5 +1,5 @@
 --NAME = Real-time combat
---DESCRIPTION = Proof-of-concept for real-time combat instead of turn-based. Known bugs include brief periods of immobility that occasionally occur when Chain Lightning is cast, the camera being weird, and the fact that sometimes a Cyclops will randomly die for no apparent reason when you kill a different Cyclops.
+--DESCRIPTION = Proof-of-concept for real-time combat instead of turn-based. Known bugs include brief periods of immobility that occasionally occur when Chain Lightning is cast, the camera being weird, and the fact that sometimes a Cyclops will randomly die for no apparent reason when you kill a different Cyclops. Made By Quinn
 --MAP = Tutorial1
 --SPELLS = {}
 --DEBUG = FALSE
