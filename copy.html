@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Parameters Display</title>
+</head>
+<body>
+    <div id="result">
+        Empty
+    </div>
+
+    <script>
+        // Function to parse query parameters from the URL
+        function getQueryParameters() {
+            var queryString = window.location.search.slice(1);
+            var params = new URLSearchParams(queryString);
+            return params;
+        }
+
+        // Function to display query parameters in the specified div
+        function displayQueryParameters() {
+            var params = getQueryParameters();
+            var resultDiv = document.getElementById("result");
+
+            if (params) {
+                var resultHTML = "";
+
+                params.forEach(function(value, key) {
+                    resultHTML += "<h2>" + key + "</h2><br>";
+                    resultHTML = value + "<br>";
+                });
+
+                resultDiv.innerHTML = resultHTML;
+            } else {
+                resultDiv.innerHTML = "<p>No query parameters found.</p>";
+            }
+        }
+
+        window.onload = displayQueryParameters;
+    </script>
+
+</body>
+</html>
