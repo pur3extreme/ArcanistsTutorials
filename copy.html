@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Query Parameters Display</title>
+    <title>Query</title>
+     <style>
+        body {
+            background-color: black; 
+            color: white;
+        }
+         #result {
+            border: 1px solid #ccc;
+        }
+    </style>
 </head>
 <body>
     <div id="result">
@@ -28,7 +37,7 @@
 
                 params.forEach(function(value, key) {
                     resultHTML += "<h2>" + key + "</h2><br>";
-                    resultHTML += value + "<br>";
+                    resultHTML += value.replace(/\n/g, "<br>") + "<br>";
                 });
 
                 resultDiv.innerHTML = resultHTML;
