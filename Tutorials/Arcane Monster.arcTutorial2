@@ -1,0 +1,16 @@
+--NAME = Unnamed
+--DESCRIPTION = No Description
+--MAP = 0
+--SPELLS = {"Arcane Arrow", "Arcane Bomb", "Arcane Tower", "Arcane Energiser", "Arcane Gate", "Arcane Portal", "Summon Imps", "Imp Destruction", "Arcane Glyph", "Arcane Sigil", "Arcane Flash", "Summon Dragon Egg"}
+--DEBUG = TRUE
+
+--CODE--
+
+function main()
+	game.getUser().arcaneMonster = true
+    while true do
+        --Some lua logic goes here
+        --Open the API github page for basic documentation and usage
+        coroutine.yield(0)
+    end
+end
