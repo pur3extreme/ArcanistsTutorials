@@ -1,5 +1,5 @@
---NAME = Unnamed
---DESCRIPTION = No Description
+--NAME = Arcane Monster
+--DESCRIPTION = Allows the player to play as an Arcane Monster in a Sandbox like environment (Open it in the Tutorial editor to have access to the console) 
 --MAP = 0
 --SPELLS = {"Arcane Arrow", "Arcane Bomb", "Arcane Tower", "Arcane Energiser", "Arcane Gate", "Arcane Portal", "Summon Imps", "Imp Destruction", "Arcane Glyph", "Arcane Sigil", "Arcane Flash", "Summon Dragon Egg"}
 --DEBUG = TRUE
